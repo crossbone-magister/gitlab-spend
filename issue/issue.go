@@ -9,7 +9,7 @@ import (
 	"github.com/crossbone-magister/timewlib"
 )
 
-const ProjectIssue = "issue:"
+const AnnotationPrefix = "gitlab:"
 
 type Issue struct {
 	Iid      string
@@ -27,8 +27,9 @@ func (i *Issue) Details() string {
 func NewIssue(interval timewlib.Interval) (*Issue, error) {
 	var project = ""
 	var iid = ""
-	for _, tag := range interval.Tags {
-		if issue, ok := strings.CutPrefix(tag, ProjectIssue); ok {
+	annotations := strings.Split(interval.Annotation, " ")
+	for _, annotation := range annotations {
+		if issue, ok := strings.CutPrefix(annotation, AnnotationPrefix); ok {
 			split := strings.Split(issue, "#")
 			project = split[0]
 			iid = split[1]
