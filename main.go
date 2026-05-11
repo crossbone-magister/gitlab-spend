@@ -6,6 +6,7 @@ import (
 	"gitlab-spend/issue"
 	"gitlab-spend/logic"
 	"gitlab-spend/output"
+	"gitlab-spend/state"
 	"io"
 	"log"
 	"net/http"
@@ -23,11 +24,18 @@ func main() {
 		var extConfig, err = config.New(configuration)
 		timewlib.ExitIfError(err)
 		if intervals, err := timewlib.Process(raw.Intervals); err == nil {
+			st, err := state.Load(extConfig.StateFile())
+			timewlib.ExitIfError(err)
 			var successes = 0
 			var errors = 0
 			for _, interval := range intervals {
 				toRegister, err := issue.NewIssue(interval)
 				if err == nil {
+					fingerprint := toRegister.Fingerprint()
+					if st.IsRegistered(fingerprint) {
+						log.Printf("Skipping already registered interval %s\n\n", interval.String())
+						continue
+					}
 					var response, err = logic.RegisterTimeSpent(*toRegister, client, extConfig)
 					if err != nil {
 						fmt.Println("Error: ", err, " for interval ", interval.String())
@@ -38,6 +46,9 @@ func main() {
 						fmt.Println("Error response: ", response.Status, " for interval ", interval.String())
 						errors++
 						continue
+					}
+					if err := st.MarkRegistered(fingerprint); err != nil {
+						log.Printf("Warning: could not persist state for interval %s: %v\n", interval.String(), err)
 					}
 					successes++
 					if configuration.IsDebug() {
@@ -53,7 +64,7 @@ func main() {
 					log.Printf("Skipping interval %s, no issue found\n\n", interval.String())
 				}
 			}
-			err := output.PrintReport(os.Stdout, intervals, successes, errors)
+			err = output.PrintReport(os.Stdout, intervals, successes, errors)
 			timewlib.ExitIfError(err)
 			if err != nil {
 				fmt.Println("Error: ", err)
